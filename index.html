@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>华山留言板</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 680px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      text-align: center;
+      color: #fff;
+      font-size: 2rem;
+      margin-bottom: 24px;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+
+    /* 发布区域 */
+    .post-box {
+      background: #fff;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+    }
+
+    .post-box input,
+    .post-box textarea {
+      width: 100%;
+      border: 2px solid #e8e8e8;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 15px;
+      transition: border-color 0.2s;
+      outline: none;
+      font-family: inherit;
+    }
+
+    .post-box input:focus,
+    .post-box textarea:focus {
+      border-color: #667eea;
+    }
+
+    .post-box input { margin-bottom: 12px; }
+    .post-box textarea { resize: vertical; min-height: 80px; }
+
+    .post-box .actions {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 12px;
+    }
+
+    .btn {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 28px;
+      font-size: 15px;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+
+    .btn:hover { opacity: 0.9; }
+    .btn:active { transform: scale(0.97); }
+
+    /* 留言列表 */
+    .message-list { display: flex; flex-direction: column; gap: 14px; }
+
+    .message-card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 18px 22px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+      animation: fadeUp 0.35s ease;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .message-card .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .message-card .author {
+      font-weight: 600;
+      color: #333;
+      font-size: 15px;
+    }
+
+    .message-card .time {
+      font-size: 12px;
+      color: #aaa;
+    }
+
+    .message-card .content {
+      color: #555;
+      font-size: 14px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .message-card .delete-btn {
+      background: none;
+      border: none;
+      color: #ccc;
+      cursor: pointer;
+      font-size: 18px;
+      padding: 0 4px;
+      transition: color 0.2s;
+    }
+
+    .message-card .delete-btn:hover { color: #e74c3c; }
+
+    .empty-state {
+      text-align: center;
+      color: rgba(255,255,255,0.7);
+      padding: 40px 0;
+      font-size: 15px;
+    }
+
+    /* 提示 */
+    .toast {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-60px);
+      background: #333;
+      color: #fff;
+      padding: 10px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      opacity: 0;
+      transition: all 0.3s ease;
+      z-index: 999;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🏔️ 华山留言板</h1>
+
+    <div class="post-box">
+      <input id="authorInput" type="text" placeholder="你的昵称" maxlength="20" />
+      <textarea id="contentInput" placeholder="写下你的留言…" maxlength="500"></textarea>
+      <div class="actions">
+        <button class="btn" onclick="postMessage()">发布留言</button>
+      </div>
+    </div>
+
+    <div id="messageList" class="message-list"></div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script>
+    const STORAGE_KEY = 'huashan_messages';
+
+    function loadMessages() {
+      try {
+        return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+      } catch { return []; }
+    }
+
+    function saveMessages(msgs) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(msgs));
+    }
+
+    function renderMessages() {
+      const list = document.getElementById('messageList');
+      const messages = loadMessages();
+
+      if (messages.length === 0) {
+        list.innerHTML = '<div class="empty-state">还没有留言，快来抢沙发吧！</div>';
+        return;
+      }
+
+      list.innerHTML = messages.map((msg, i) => `
+        <div class="message-card">
+          <div class="header">
+            <span class="author">${escapeHtml(msg.author)}</span>
+            <span>
+              <span class="time">${msg.time}</span>
+              <button class="delete-btn" onclick="deleteMessage(${i})" title="删除">×</button>
+            </span>
+          </div>
+          <div class="content">${escapeHtml(msg.content)}</div>
+        </div>
+      `).join('');
+    }
+
+    function postMessage() {
+      const author = document.getElementById('authorInput').value.trim();
+      const content = document.getElementById('contentInput').value.trim();
+
+      if (!author) { showToast('请输入昵称'); return; }
+      if (!content) { showToast('请输入留言内容'); return; }
+
+      const messages = loadMessages();
+      messages.unshift({
+        author,
+        content,
+        time: new Date().toLocaleString('zh-CN')
+      });
+      saveMessages(messages);
+
+      document.getElementById('authorInput').value = '';
+      document.getElementById('contentInput').value = '';
+      renderMessages();
+      showToast('留言发布成功！');
+    }
+
+    function deleteMessage(index) {
+      const messages = loadMessages();
+      messages.splice(index, 1);
+      saveMessages(messages);
+      renderMessages();
+      showToast('已删除');
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    function showToast(text) {
+      const t = document.getElementById('toast');
+      t.textContent = text;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 1800);
+    }
+
+    // 初始渲染
+    renderMessages();
+  </script>
+</body>
+</html>
